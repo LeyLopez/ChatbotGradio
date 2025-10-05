@@ -93,16 +93,9 @@ provider_models = {
         "google/gemma-3-27b-it:free",
         "google/gemini-2.0-flash-exp:free",
     ],
-    "Microsoft": [
-        "microsoft/mai-ds-r1:free",
-    ],
     "Qwen": [
         "qwen/qwen3-14b:free",
         "qwen/qwen-2.5-72b-instruct:free",
-    ],
-    "Mistral": [
-        "mistralai/mistral-7b-instruct:free",
-        "mistralai/mistral-small-24b-instruct-2501:free"
     ],
     "DeepSeek":[
         "deepseek/deepseek-r1-distill-llama-70b:free",
@@ -111,7 +104,6 @@ provider_models = {
 }
 
 import gradio as gr
-import random
 import time
 
 with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
