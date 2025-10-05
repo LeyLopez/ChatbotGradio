@@ -7,8 +7,11 @@ Original file is located at
     https://colab.research.google.com/drive/1H_a-4qptEZpRCUuOqmky36PsYPQulAtK
 """
 
+# If you need to install packages, run the following command in your terminal:
+# pip install openai python-dotenv gradio
+
 from dotenv import load_dotenv
-load_dotenv(override=True)
+load_dotenv('/content/variables.env', override=True)
 
 import os
 open_router_api_key = os.getenv("OPEN_ROUTER_API_KEY")
@@ -20,31 +23,31 @@ print(open_router_api_key)
 from openai import OpenAI
 import time
 
-def open_router_call(model, task, message, history):
+def open_router_call(model, task, message, history, source_lang=None, target_lang=None):
     open_router_ai = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=open_router_api_key,
-        timeout=30.0
+        timeout=30.0  # Timeout para evitar esperas infinitas
     )
 
     try:
         start_time = time.time()
 
         if task == "Translation":
-            content = "Translate the following text from Spanish to English:"
+            content = f"Translate the following text from {source_lang} to {target_lang}:"
         else:
-            content = "Summarize the following text:"
+            content = "Summarize the following text."  # Añadido punto final
 
         messages = [{"role": "system", "content": content}]
 
-
+        # Construir historial de mensajes
         for msg in history:
             if isinstance(msg, list) and len(msg) == 2:
-
+                # Formato Gradio: [mensaje_usuario, respuesta_asistente]
                 messages.append({"role": "user", "content": msg[0]})
                 messages.append({"role": "assistant", "content": msg[1]})
             elif isinstance(msg, dict):
-
+                # Formato dict
                 if msg["role"] == "user":
                     messages.append({"role": "user", "content": msg["content"]})
                 elif msg["role"] == "assistant":
@@ -57,7 +60,7 @@ def open_router_call(model, task, message, history):
         completion = open_router_ai.chat.completions.create(
             model=model,
             messages=messages,
-            max_tokens=500,
+            max_tokens=800,  # Limitar para respuestas más rápidas
             temperature=0.7
         )
 
@@ -70,8 +73,16 @@ def open_router_call(model, task, message, history):
         print(f"Error: {e}")
         return f"Error: {str(e)}"
 
+languages = {
+    "Spanish": "Spanish",
+    "English": "English",
+    "French": "French",
+    "German": "German",
+    "Italian": "Italian"
+}
+
 provider_models = {
-    "Meta (Rápido)": [
+    "Meta": [
         "meta-llama/llama-3.3-70b-instruct:free",
         "meta-llama/llama-4-maverick:free",
     ],
@@ -97,6 +108,7 @@ provider_models = {
 }
 
 import gradio as gr
+import random
 import time
 
 with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
@@ -112,12 +124,12 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
         provider = gr.Dropdown(
             list(provider_models.keys()),
             label="Provider",
-            value="Meta (Rápido)",
+            value="Meta",
         )
         model = gr.Dropdown(
-            provider_models["Meta (Rápido)"],
+            provider_models["Meta"],
             label="Model",
-            value=provider_models["Meta (Rápido)"][0]
+            value=provider_models["Meta"][0]
         )
         task = gr.Radio(
             ["Translation", "Summarize"],
@@ -125,16 +137,30 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
             value="Translation",
         )
 
+    # Selectores de idioma para traducción
+    with gr.Row(visible=True) as language_row:
+        source_lang = gr.Dropdown(
+            list(languages.keys()),
+            label="Source Language",
+            value="Spanish",
+        )
+        target_lang = gr.Dropdown(
+            list(languages.keys()),
+            label="Target Language",
+            value="English",
+        )
+
     with gr.Row():
         input_box = gr.Textbox(
             label="Input",
             placeholder="Type your message here...",
-            lines=5
+            lines=4
         )
 
     with gr.Row():
         submit = gr.Button("Submit", variant="primary")
         clear = gr.Button("Clear")
+
 
     status = gr.Textbox(label="Status", visible=False)
 
@@ -144,14 +170,19 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
             value=provider_models[provider][0]
         )
 
-    def respond(message, history, provider_val, model_val, task_val):
+    def toggle_language_inputs(task):
+
+        return gr.update(visible=(task == "Translation"))
+
+    def respond(message, history, provider_val, model_val, task_val, src_lang, tgt_lang):
         if not message or message.strip() == "":
             return history, "", "Please enter a message"
+
 
         temp_history = history + [[message, "Processing..."]]
 
         try:
-            response = open_router_call(model_val, task_val, message, history)
+            response = open_router_call(model_val, task_val, message, history, src_lang, tgt_lang)
             new_history = history + [[message, response]]
             return new_history, "", f"Response generated successfully"
 
@@ -165,9 +196,15 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
         outputs=[model]
     )
 
+    task.change(
+        toggle_language_inputs,
+        inputs=[task],
+        outputs=[language_row]
+    )
+
     submit.click(
         respond,
-        inputs=[input_box, chatbot, provider, model, task],
+        inputs=[input_box, chatbot, provider, model, task, source_lang, target_lang],
         outputs=[chatbot, input_box, status]
     )
 
