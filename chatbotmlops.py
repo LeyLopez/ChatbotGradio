@@ -11,7 +11,7 @@ Original file is located at
 # pip install openai python-dotenv gradio
 
 from dotenv import load_dotenv
-load_dotenv('/content/variables.env', override=True)
+load_dotenv(override=True)
 
 import os
 open_router_api_key = os.getenv("OPEN_ROUTER_API_KEY")
@@ -65,13 +65,16 @@ def open_router_call(model, task, message, history, source_lang=None, target_lan
         )
 
         elapsed_time = time.time() - start_time
+        elapsed_ms = elapsed_time * 1000
         print(f"Respuesta recibida en {elapsed_time:.2f} segundos")
 
-        return completion.choices[0].message.content
+        return completion.choices[0].message.content, elapsed_ms
 
     except Exception as e:
+        elapsed_time = time.time() - start_time
+        elapsed_ms = elapsed_time * 1000
         print(f"Error: {e}")
-        return f"Error: {str(e)}"
+        return f"Error: {str(e)}", elapsed_ms
 
 languages = {
     "Spanish": "Spanish",
@@ -163,6 +166,7 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
 
 
     status = gr.Textbox(label="Status", visible=False)
+    inference_time = gr.Textbox(label="Inference time", visible=True)
 
     def update_models(provider):
         return gr.update(
@@ -182,13 +186,14 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
         temp_history = history + [[message, "Processing..."]]
 
         try:
-            response = open_router_call(model_val, task_val, message, history, src_lang, tgt_lang)
+            response, elapsed_ms = open_router_call(model_val, task_val, message, history, src_lang, tgt_lang)
             new_history = history + [[message, response]]
-            return new_history, "", f"Response generated successfully"
+            time_str = f"{elapsed_ms:.1f} ms"
+            return new_history, "", f"Response generated successfully", time_str
 
         except Exception as e:
             error_history = history + [[message, f"Error: {str(e)}"]]
-            return error_history, "", f"Error occurred"
+            return error_history, "", f"Error occurred", "0.0 ms"
 
     provider.change(
         update_models,
@@ -205,7 +210,7 @@ with gr.Blocks(title="Switchable LLM App con Gradio") as demo:
     submit.click(
         respond,
         inputs=[input_box, chatbot, provider, model, task, source_lang, target_lang],
-        outputs=[chatbot, input_box, status]
+        outputs=[chatbot, input_box, status, inference_time]
     )
 
     clear.click(
